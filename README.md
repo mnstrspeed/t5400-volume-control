@@ -8,7 +8,7 @@ The purpose of this project is to create a control interface for the Creative In
 ## Software
 `t5400.c` is a kernel module for Linux on the Raspberry Pi which drives the LTC1661 and allows programs in user space to control the device through a sysfs interface.
 
-### Install:
+### Install
 ```bash
 sudo -s
 make
