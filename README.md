@@ -6,20 +6,24 @@ The purpose of this project is to create a control interface for the Creative In
 * LTC1661 dual 10-bit DAC, connected to the GPIO pins of the Raspberry Pi (pin layout specified in `t5400.c`)
 
 ## Software
-`t5400.c` is a kernel module for Linux on the Raspberry Pi which drives the LTC1661 and allows programs in user space to control the device through a sysfs interface:
+`t5400.c` is a kernel module for Linux on the Raspberry Pi which drives the LTC1661 and allows programs in user space to control the device through a sysfs interface.
 
+### Install:
 ```bash
 sudo -s
 make
 cp t5400.ko /lib/modules/$(uname -r)/
 depmod -a
 exit
-
-echo 1023 > /sys/class/volume_control/t5400/volume
-echo 600 > /sys/class/volume_control/t5400/bass
-...
+```
 
 Note: make sure you have installed the appropriate Linux headers, i.e.:
 ```bash
 sudo pacman -S linux-headers
+```
+
+### Usage
+```bash
+echo 1023 > /sys/class/volume_control/t5400/volume
+echo 600 > /sys/class/volume_control/t5400/bass
 ```
