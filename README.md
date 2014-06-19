@@ -14,6 +14,7 @@ sudo -s
 make
 cp t5400.ko /lib/modules/$(uname -r)/
 depmod -a
+modprobe t5400
 exit
 ```
 
