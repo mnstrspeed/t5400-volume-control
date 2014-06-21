@@ -1,6 +1,10 @@
 #include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
 #include <linux/device.h>
+#include <linux/err.h>
 #include <linux/delay.h>
+
 #include <asm/io.h>
 #include <mach/platform.h>
 
@@ -12,6 +16,7 @@ MODULE_LICENSE("GPL");
 #define CS_PIN GPIO_P1_15
 #define SCK_PIN GPIO_P1_13
 #define DIN_PIN GPIO_P1_11
+#define ON_PIN GPIO_P1_16
 
 struct GPIO_REGISTERS
 {
@@ -128,30 +133,67 @@ void dac_write(int command, unsigned int value)
 	gpio_write(CS_PIN, HIGH);
 }
 
-static ssize_t set_volume_callback(struct device* dev, struct device_attribute* attr,
-	const char* buffer, size_t count)
+long volume = 0;
+long bass = 0;
+unsigned int on = LOW;
+
+static ssize_t show_on(struct device* dev, struct device_attribute* attr,
+	char* buf)
 {
-	long value = 0;
-	if (kstrtol(buffer, 10, &value) < 0 || value < 0 || value > 1023)
+	return scnprintf(buf, 4096, "%d\n", on);
+}
+
+
+static ssize_t store_on(struct device* dev, struct device_attribute* attr,
+	const char* buffer, size_t count)
+{	
+	if (kstrtouint(buffer, 10, &on) < 0)
 		return -EINVAL;
-	printk("Setting volume to %ld", value);
-	dac_write(LOAD_A, value);
+
+	gpio_write(ON_PIN, on);
 	return count;
 }
 
-static ssize_t set_bass_callback(struct device* dev, struct device_attribute* attr,
+static ssize_t show_volume(struct device* dev, struct device_attribute* attr,
+	char* buf)
+{
+	return scnprintf(buf, 4096, "%ld\n", volume);
+}
+
+static ssize_t store_volume(struct device* dev, struct device_attribute* attr,
 	const char* buffer, size_t count)
 {
-	long value = 0;
-	if (kstrtol(buffer, 10, &value) < 0 || value < 0 || value > 1023)
+	printk("t5400.store_volume\n");
+	if (kstrtol(buffer, 10, &volume) < 0 || volume < 0 || volume > 1023)
 		return -EINVAL;
-	printk("Setting bass to %ld", value);
-	dac_write(LOAD_B, value);
+
+	printk("Setting volume to %ld\n", volume);
+	dac_write(LOAD_A, volume);
 	return count;
 }
 
-static DEVICE_ATTR(volume, S_IWUSR | S_IWGRP | S_IWOTH, NULL, set_volume_callback); 
-static DEVICE_ATTR(bass, S_IWUSR | S_IWGRP | S_IWOTH, NULL, set_bass_callback);
+static ssize_t show_bass(struct device* dev, struct device_attribute* attr,
+	char* buf)
+{
+	return scnprintf(buf, 4096, "%ld\n", bass);
+}
+
+static ssize_t store_bass(struct device* dev, struct device_attribute* attr,
+	const char* buffer, size_t count)
+{
+	printk("t5400.store_bass\n");
+
+	if (kstrtol(buffer, 10, &bass) < 0 || bass < 0 || bass > 1023)
+		return -EINVAL;
+
+	printk("Setting bass to %ld\n", bass);
+	dac_write(LOAD_B, bass);
+	return count;
+}
+
+static DEVICE_ATTR(volume, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH, show_volume, store_volume); 
+static DEVICE_ATTR(bass, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH, show_bass, store_bass);
+static DEVICE_ATTR(on, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH, show_on, store_on);
 
 static struct class *device_class;
 static struct device *device_object;
@@ -162,21 +204,28 @@ static int __init t5400_init(void)
 
 	printk("Loading t5400\n");
 	device_class = class_create(THIS_MODULE, "volume_control");
+	WARN_ON(IS_ERR(device_class));
 	device_object = device_create(device_class, NULL, 0, NULL, "t5400");
+	WARN_ON(IS_ERR(device_object));
 
 	result = device_create_file(device_object, &dev_attr_volume);
+	WARN_ON(result < 0);
 	result = device_create_file(device_object, &dev_attr_bass);
+	WARN_ON(result < 0);
+	result = device_create_file(device_object, &dev_attr_on);
+	WARN_ON(result < 0);
 
 	gpio_init();
 	gpio_fsel(CS_PIN, GPIO_FSEL_OUTP);
 	gpio_fsel(SCK_PIN, GPIO_FSEL_OUTP);
 	gpio_fsel(DIN_PIN, GPIO_FSEL_OUTP);
+	gpio_fsel(ON_PIN, GPIO_FSEL_OUTP);
 
 	gpio_write(CS_PIN, HIGH);
 	gpio_write(SCK_PIN, LOW);
 	sync();
 
-	return result;
+	return 0;
 }
 
 static void __exit t5400_exit(void)
@@ -185,6 +234,7 @@ static void __exit t5400_exit(void)
 
 	device_remove_file(device_object, &dev_attr_volume);
 	device_remove_file(device_object, &dev_attr_bass);
+	device_remove_file(device_object, &dev_attr_on);
 	device_destroy(device_class, 0);
 	class_destroy(device_class);
 }
